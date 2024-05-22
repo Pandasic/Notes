@@ -11,4 +11,6 @@ Temp
 *.tar.gz
 *.zip
 
+# rm mac DS_Store file
+.DS_Store
 
