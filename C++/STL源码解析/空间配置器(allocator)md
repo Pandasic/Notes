@@ -1,0 +1,143 @@
+---
+title: 空间配置器(allocator
+tag: [计算机课程学习,C++,STL源码解析,]
+---
+# 空间配置器(allocator)
+
+## 标准接口
+
+| allocator::value_type                                       |                                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| allocator::pointer                                          |                                                              |
+| allocator::const_pointer                                    |                                                              |
+| allocator::reference                                        |                                                              |
+| allocator::size_type                                        |                                                              |
+| allocator::differenece_type                                 |                                                              |
+| allocator::rebind                                           |                                                              |
+| allocator::allocator()                                      | 默认构造函数                                                 |
+| allocator::allocator(const allocator&)                      | 拷贝构造                                                     |
+| template<class U> allocator::allocator(const allocator<U>&) | 泛化的拷贝构造                                               |
+| allocator::~allocator()                                     | 默认析构                                                     |
+| pointer allocator::address(const_referemce x) const         | 返回对象的地址  address(x) 等同于&x                          |
+| const_pointer allocator::address(const_referemce x) const   | 返回某个const对象的地址  address(x) 等同于&x                 |
+| pointer allocator::allocate(size_type n,const void*= 0)     | 配置空间,足以存储n个T 对象，第二个参数为提示，实际上利用它来增进区域性(locality)或完全忽略 |
+| void allocator::deallocate(pointer p,size_type n)           | 归还之前配置的空间                                           |
+| size_type allocator::max_size() const                       | 返回可配置的最大量                                           |
+| void allocator::construct(pointer p,const T& x)             | 等同于 new(const void*) p) T(x)                              |
+| void allocator::destory(pointer p)                          | 等同于 p->T()                                                |
+
+## 空间配置器的简单设计
+
+[CODE](F:\Projects\C++ Projects\STL\STLSourceCodeNote\2_STL_allocator\2_1_1_jjalloc.h)
+
+SGI STL 地配置器不接受任何参数 名称为alloc
+
+```c++
+vector<int,std::alloctor<int> > iv //VC CB
+vector<int,std::alloc> iv // GCC
+```
+
+## SGI 标准空间配置器 std::allocator
+
+SGI定义过哟个符合标准地allocator 但SGI未使用过
+
+原因：
+
+1. 只是为了回溯兼容
+2. 只相应 void* 指针，如果是标准接口 会相应一个指向对象类别地指针T*
+3. 只是对::operator new 和 ::operateor delete 做简单包装
+
+## SGI 特殊地空间配置器
+
+C++一般内存配饰与释放操作
+
+```C++
+class Foo{...}
+Foo* pf = new Foo;	//配置内存，然后构造内存
+delete pf;		 	//析构对象，然后释放内存
+```
+
+* 其中 new 含有两阶段操作
+
+    1. 调用 ::operateor new 配置内存
+
+    2. 调用 Foo::Foo() 构造对象内容
+
+* delete两阶段
+
+    1. 调用 Foo::~Foo 析构
+
+    2. 调用 ::operator delete 释放内存
+
+在STL allocator将两个阶段分开
+
+* 内存配置操作 alloc::allocate()
+* 内存释放操作 alloc::deallocte()
+* 对象构造 ::construct()
+* 析构操作::destory()
+
+配置器位于<memory>
+
+文件内 SGI内含有
+
+```C++
+#include <stl_alloc.h>		//内存空间配置与释放
+#include <stl_construct.h>	//对象内容地构造与析构
+```
+
+![memory文件构成](img/空间配置器(allocator)md/memory文件构成.png)
+
+## 构造与析构基本工具 construct() 和 destroty()
+
+[stl_construct.h](F:\Projects\C++ Projects\STL\STLSourceCodeNote\0_SGI_STL_Source_code\stl_construct.h)
+
+### construct 
+
+调用placement new 调用 T1::T1(vlaue)
+
+### destroy()
+
+* 版本1 接收一个指针
+
+    直接调用其虚构函数
+
+* 版本2 接受两个迭代器
+
+    此函数会设法中出元素的数值型别进而用 __type_traits<>采取最适当措施
+
+    判断元素的数值型别(value type)是否有 trivial destructor
+
+    对char* 和 wchar_t有特化
+
+![image-20201106153812591](img/空间配置器(allocator)md/construct()和destory()的示意.png)
+
+## 空间的配置与释放 std::alloc
+
+### SGI对内存的设计哲学
+
+* 向 system heap要求空间
+* 考虑多线程状态
+* 考虑内存不足的应变措施
+* 考虑过多的小型区块可能造成的内存碎片问题(fragment)
+
+C++内存配置的基本操作为 ::operator new() 释放的基本操作为::operator delete()
+
+相当于C语言的					malloc()										 free()
+
+SGI 与C语言一样
+
+
+
+### 内存碎片破碎问题
+
+SGI 设计了双层级配置器
+
+第一层之际使用malloc()和free()
+
+第二级配置器则视情况采用不同的策略
+
+​	超过128bytes时 视为足够大 嗲用一级配置器
+
+​	小于128bytes时 为降低额外负担 使用复杂的 memory pool 整理方式
+
+是否开启第二级配置器取决于 **__USE_MALLOC** 是否被定义[SGI 未定义__USE_MALLOC，即开启了二级配置器]

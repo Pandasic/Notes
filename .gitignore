@@ -1,0 +1,14 @@
+# MAC /Typora Temp File
+._*
+
+# temp file
+Temp 
+
+# log file
+*.log
+
+# zip file
+*.tar.gz
+*.zip
+
+
